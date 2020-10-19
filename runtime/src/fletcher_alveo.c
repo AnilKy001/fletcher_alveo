@@ -341,15 +341,3 @@ fstatus_t platformCacheHostBuffer(const uint8_t *host_source, da_t *device_desti
   buffer_ptr += size;
   return FLETCHER_STATUS_OK;
 }
-© 2020 GitHub, Inc.
-Terms
-Privacy
-Security
-Status
-Help
-Contact GitHub
-Pricing
-API
-Training
-Blog
-About
