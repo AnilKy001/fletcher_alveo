@@ -18,6 +18,15 @@ typedef struct {
 } AlveoConfig;
 
 typedef struct {
+    int deviceCount;
+    xclDeviceHandle device_handle;
+    int selected_device;
+    int xcl_err;
+    xuid_t xclbinId;
+    unsigned int ipIndex;
+    
+    
+    
     char *xclbin;
     char *target_device_name;
     cl_device_id device_id;
@@ -28,6 +37,7 @@ typedef struct {
     cl_command_queue commands;
     cl_program program;   
     cl_kernel kernel;
+    
 } PlatformState;
 
 PlatformState alveo_state ={NULL, ALVEO_DEVICE_NAME, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};

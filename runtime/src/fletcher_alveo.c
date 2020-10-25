@@ -68,7 +68,37 @@ fstatus_t platformGetName(char *name, size_t size) {
 fstatus_t platformInit(void *argv[]) {  
   debug_print("[FLETCHER_ALVEO] Initializing platform.       Arguments @ [host] %016lX.\n", (unsigned long) arg);
   // Check psl_server.dat is present
+  
+  
+  alveo_state.deviceCount = xclProbe();
+  
+  
+  alveo_state.device_handle = xclOpen(alveo_state.selected_device);
+  alveo_state.xcl_err = xclLoadXclBin(alveo_state.device_handle, alveo_state.xclbin);
 
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
     char *target_device_name_pass;
     
     if(argv[1] != NULL){
@@ -126,6 +156,8 @@ fstatus_t platformInit(void *argv[]) {
        return -1;
    }
 
+
+   xclProbe();
    //iterate all devices to select the target device.
    for (uint i=0; i<num_devices; i++) {
       alveo_state.err = clGetDeviceInfo(devices[i], CL_DEVICE_NAME, 1024, cl_device_name, 0);
@@ -148,6 +180,18 @@ fstatus_t platformInit(void *argv[]) {
        return EXIT_FAILURE;
    }
    
+
+
+
+
+
+
+
+
+
+
+
+
 
    // Create a compute context
     alveo_state.context = clCreateContext(0, 1, &(alveo_state.device_id), NULL, NULL, &(alveo_state.err));
@@ -259,13 +303,39 @@ fstatus_t platformInit(void *argv[]) {
 }
 
 
+
+
+
+
+
+
+
+
+
+
 fstatus_t platformWriteMMIO(uint64_t offset, uint32_t value) { 
-  cl_mem_ext_ptr_t  ext; //Extension pointer.
-  ext.param = alveo_state.kernel;
-  ext.obj = nullptr;
+    alveo_state.xcl_err = xclOpenContext(alveo_state.device_handle, (const xuid_t) alveo_state.xclbinId,
+        alveo_state.ipIndex, 0);
+    
   
   
-  debug_print("[FLETCHER_SNAP] Writing MMIO register.       %04lu <= 0x%08X\n", offset, value);
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  debug_print("[FLETCHER_ALVEO] Writing MMIO register.       %04lu <= 0x%08X\n", offset, value);
   return FLETCHER_STATUS_OK;
 }
 
