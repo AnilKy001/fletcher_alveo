@@ -65,22 +65,22 @@ fstatus_t platformGetName(char *name, size_t size) {
 // argv[1] -> Target device name.
 //argv[2] -> Kernel name.
 
-fstatus_t platformInit(void *argv[]) {  
+fstatus_t platformInit(void *argv[]) {
   debug_print("[FLETCHER_ALVEO] Initializing platform.       Arguments @ [host] %016lX.\n", (unsigned long) arg);
   // Check psl_server.dat is present
 
     char *target_device_name_pass;
-    
+
     if(argv[1] != NULL){
         target_device_name_pass = (char *) argv[1];
     }
-    
+
     else{
         target_device_name_pass = "_u250_xdma_201820_1";  // Look at this and correct it.
     }
-    
+
     alveo_state.target_device_name = target_device_name_pass;
-    
+
   // Get all platforms and then select Xilinx platform
     cl_platform_id platforms[16];       // platform id
     cl_uint platform_count;
@@ -97,7 +97,7 @@ fstatus_t platformInit(void *argv[]) {
    for (unsigned int iplat=0; iplat<platform_count; iplat++) {
        alveo_state.err = clGetPlatformInfo(platforms[iplat], CL_PLATFORM_VENDOR, 1000, (void *) alveo_state.cl_platform_vendor,NULL);
        if (alveo_state.err != CL_SUCCESS) {
-       printf(  "%s", platforms[iplat]);	
+       printf(  "%s", platforms[iplat]);
            printf("Error: clGetPlatformInfo(CL_PLATFORM_VENDOR) failed!\n");
            printf("Test failed\n");
            return EXIT_FAILURE;
@@ -140,14 +140,14 @@ fstatus_t platformInit(void *argv[]) {
            alveo_state.device_id = devices[i];
            device_found = 1;
            printf("Selected %s as the target device\n", cl_device_name);
-      
+
       }
    }
   if (!device_found) {
        printf("Target device %s not found. Exit.\n", alveo_state.target_device_name);
        return EXIT_FAILURE;
    }
-   
+
 
    // Create a compute context
     alveo_state.context = clCreateContext(0, 1, &(alveo_state.device_id), NULL, NULL, &(alveo_state.err));
@@ -157,7 +157,7 @@ fstatus_t platformInit(void *argv[]) {
         return EXIT_FAILURE;
     }
 
-    // Create a command commands
+    // Create a command q "commands".
     alveo_state.commands = clCreateCommandQueue(alveo_state.context, &(alveo_state.device_id), 0, &(alveo_state.err));
     if (!alveo_state.commands) {
         printf("Error: Failed to create a command commands!\n");
@@ -167,16 +167,25 @@ fstatus_t platformInit(void *argv[]) {
     }
 
 
-    //Indicates whether the program binary for the device 
+    //Indicates whether the program binary for the device
     //was loaded successfully or not.
-    int status;  
-    
-    
+    int status;
+
+/*
+the host and kernel code are compiled separately to create separate executable files:
+the host program executable and the FPGA binary (.xclbin). When the host application
+runs, it must load the .xclbin file using the clCreateProgramWithBinary API.
+*/
+
+
+
+
+
     // Create Program Objects
     // Load binary from disk
     unsigned char *kernelbinary;
     alveo_state.xclbin = argv[0];
-        
+
     printf("INFO: loading xclbin %s\n", alveo_state.xclbin);
     int n_i0 = load_file_to_memory(alveo_state.xclbin, (char **) &kernelbinary); //load xclbin to kernelbinary
     if (n_i0 < 0) {
@@ -185,17 +194,17 @@ fstatus_t platformInit(void *argv[]) {
      return EXIT_FAILURE;
     }
 
-   
-   
+
+
 
     size_t n0 = n_i0;  //size of the file loaded into memory.
 
     // Create the compute program from offline.
-    
-    //When the host application runs, it must load the FPGA binary(.xclbin) 
+
+    //When the host application runs, it must load the FPGA binary(.xclbin)
     //file using the following API.
-    
-    //Creates a program object for a context, and loads 
+
+    //Creates a program object for a context, and loads
     //specified binary data into the program object.
     alveo_state.program = clCreateProgramWithBinary(context, 1, &alveo_state.device_id, &n0,
                                      (const unsigned char **) &kernelbinary, &status, &(alveo_state.err));
@@ -207,11 +216,12 @@ fstatus_t platformInit(void *argv[]) {
     }
 
 
-   
-   
+
+
+/* Is clBuildProgram necessary?
     // Build the program executable.
-    
-    //Builds (compiles and links) a program executable(alveo_state.program) 
+
+    //Builds (compiles and links) a program executable(alveo_state.program)
     //from the program source or binary.
     alveo_state.err = clBuildProgram(alveo_state.program, 0, NULL, NULL, NULL, NULL);
     if (alveo_state.err != CL_SUCCESS) {
@@ -224,10 +234,13 @@ fstatus_t platformInit(void *argv[]) {
       printf("Test failed\n");
       return EXIT_FAILURE;
     }
+*/
 
 
 
-    //Once the OpenCL environment is initialized, the host application is ready to issue 
+
+
+    //Once the OpenCL environment is initialized, the host application is ready to issue
     //commands to the device and interact with the kernels.
     //These commands include:
     //      1.Setting up the kernels.
@@ -239,32 +252,46 @@ fstatus_t platformInit(void *argv[]) {
 
 
     //After setting up the OpenCL environment, such as identifying devices, creating the context,
-    // command queue, and program, the host application should identify the kernels that will 
+    // command queue, and program, the host application should identify the kernels that will
     //execute on the device, and set up the kernel arguments.
-    
-    
+
+
     // Create the compute kernel in the program we wish to run.
-    
+
     const char *kernel_name = argv[2];
-    
-    alveo_state.kernel = clCreateKernel(alveo_state.program, "Vadd_A_B", &(alveo_state.err));
+
+    //The OpenCL API clCreateKernel should be used to access the kernels contained
+    // within the .xclbin file (the "program").
+    alveo_state.kernel = clCreateKernel(alveo_state.program, "FLETCHER_KERNEL", &(alveo_state.err));
     if (!(alveo_state.kernel) || (alveo_state.err) != CL_SUCCESS) {
        printf("Error: Failed to create compute kernel!\n");
        printf("Test failed\n");
        return EXIT_FAILURE;
     }
 
+    //The cl_kernel (alveo_state.kernel) object identifies a kernel in the program loaded
+    //into the FPGA that can be run by the host application.
+
+
+
+    // Create memory buffers
+    cl_mem dev_buf1 = clCreateBuffer(alveo_state.context, CL_MEM_WRITE_ONLY | CL_MEM_USE_HOST_PTR, size, &host_mem_ptr1, NULL);
+
+
+    alveo_state.err |= clSetKernelArg(alveo_state.kernel, 0, sizeof(cl_mem), &dev_buf1);
+
+
+
+
 
   return FLETCHER_STATUS_OK;
 }
 
 
-fstatus_t platformWriteMMIO(uint64_t offset, uint32_t value) { 
-  cl_mem_ext_ptr_t  ext; //Extension pointer.
-  ext.param = alveo_state.kernel;
-  ext.obj = nullptr;
-  
-  
+fstatus_t platformWriteMMIO(uint64_t offset, uint32_t value) {
+  xclRegRead(alveo_state.device_handle, )
+
+
   debug_print("[FLETCHER_SNAP] Writing MMIO register.       %04lu <= 0x%08X\n", offset, value);
   return FLETCHER_STATUS_OK;
 }
@@ -280,22 +307,58 @@ fstatus_t platformReadMMIO(uint64_t offset, uint32_t *value) {
   return FLETCHER_STATUS_OK;
 }
 
+//Streams should be directly attached to the OpenCL device object because it does not use any command queue.
+//A stream itself is a command queue that only passes the data in a particular direction, either the kernel
+//reading data from the host, or the kernel writing data to the host.
+/*
+To specify how the stream is connected to the device, a Xilinx extension pointer object (cl_mem_ext_ptr_t)
+is used to identify the kernel, and the kernel argument the stream is associated with.
+*/
 fstatus_t platformCopyHostToDevice(const uint8_t *host_source, da_t device_destination, int64_t size) {
-  debug_print(
+    cl_mem_ext_ptr_t ext;
+    ext.param = alveo_state.kernel;
+    ext.obj = nullptr;
+
+    ext.flags = 0; // Create write stream for argument 0 of kernel. MAY NEED FIXING!
+    alveo_state.h2k_stream = clCreateStream(alveo_state.device_id, XCL_STREAM_READ_ONLY, CL_STREAM, &ext, &alveo_state.stream_ret);
+
+    // Initiate the READ transfer
+    cl_stream_xfer_req rd_req {0};
+    rd_req.flags = CL_STREAM_EOT | CL_STREAM_NONBLOCKING;
+    rd_req.priv_data = (void*)"read";
+    clReadStream(alveo_state.k2h_stream, host_read_ptr, max_read_size, &rd_req, &ret);
+
+    // Checking the request completion
+    cl_streams_poll_req_completions poll_req[2] {0}; // 1 Requests
+    debug_print(
       "[FLETCHER_SNAP] Copying from host to device. [host] 0x%016lX --> [dev] 0x%016lX (%lu bytes) (NOT IMPLEMENTED)\n",
       (uint64_t) host_source,
       device_destination,
       size);
-  return FLETCHER_STATUS_OK;
+    return FLETCHER_STATUS_OK;
 }
 
 fstatus_t platformCopyDeviceToHost(da_t device_source, uint8_t *host_destination, int64_t size) {
-  debug_print(
+    cl_mem_ext_ptr_t ext;
+    ext.param = alveo_state.kernel;
+    ext.obj = nullptr;
+
+    ext.flags = 0; // Create write stream for argument 0 of kernel. MAY NEED FIXING!
+    alveo_state.k2h_stream = clCreateStream(alveo_state.device_id, XCL_STREAM_WRITE_ONLY, CL_STREAM, &ext, &alveo_state.stream_ret);
+
+    // Initiating the WRITE transfer
+    cl_stream_xfer_req wr_req {0};
+    wr_req.flags = CL_STREAM_EOT | CL_STREAM_NONBLOCKING;
+    wr_req.priv_data = (void*)"write";
+    clWriteStream(h2k_stream, host_write_ptr, write_size, &wr_req , &ret);
+
+    cl_streams_poll_req_completions poll_req[2] {0}; // 1 Requests
+    debug_print(
       "[FLETCHER_SNAP] Copying from device to host. [dev] 0x%016lX --> [host] 0x%016lX (%lu bytes) (NOT IMPLEMENTED)\n",
       device_source,
       (uint64_t) host_destination,
       size);
-  return FLETCHER_STATUS_OK;
+    return FLETCHER_STATUS_OK;
 }
 
 fstatus_t platformTerminate(void *arg) {

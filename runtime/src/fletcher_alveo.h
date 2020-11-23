@@ -18,6 +18,7 @@ typedef struct {
 } AlveoConfig;
 
 typedef struct {
+    xclDeviceHandle device_handle;
     char *xclbin;
     char *target_device_name;
     cl_device_id device_id;
@@ -26,7 +27,7 @@ typedef struct {
     char cl_platform_vendor[1001];
     cl_context context;
     cl_command_queue commands;
-    cl_program program;   
+    cl_program program;
     cl_kernel kernel;
 } PlatformState;
 
