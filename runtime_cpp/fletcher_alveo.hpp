@@ -18,7 +18,7 @@ typedef struct {
 
 typedef struct {
 	cl_int err;
-	cl::Kernel increment;
+	cl::Kernel kernel;
 	cl::Device device;
 	cl::Context context;
 	cl::CommandQueue q;	
