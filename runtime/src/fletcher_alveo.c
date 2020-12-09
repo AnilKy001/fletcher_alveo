@@ -129,6 +129,7 @@ fstatus_t platformInit(void *argv[]) {
    //iterate all devices to select the target device.
    for (uint i=0; i<num_devices; i++) {
       alveo_state.err = clGetDeviceInfo(devices[i], CL_DEVICE_NAME, 1024, cl_device_name, 0);
+
       if (alveo_state.err != CL_SUCCESS) {
            printf("Error: Failed to get device name for device %d!\n", i);
            printf("Test failed\n");
@@ -136,6 +137,7 @@ fstatus_t platformInit(void *argv[]) {
        }
 
       printf("CL_DEVICE_NAME %s\n", cl_device_name);
+
       if(strstr(alveo_state.target_device_name, cl_device_name) != NULL) {
            alveo_state.device_id = devices[i];
            device_found = 1;
@@ -314,19 +316,23 @@ fstatus_t platformReadMMIO(uint64_t offset, uint32_t *value) {
 To specify how the stream is connected to the device, a Xilinx extension pointer object (cl_mem_ext_ptr_t)
 is used to identify the kernel, and the kernel argument the stream is associated with.
 */
+
+/*A stream itself is a command queue that only passes the data in a particular direction, either the kernel
+reading data from the host, or the kernel writing data to the host.*/
 fstatus_t platformCopyHostToDevice(const uint8_t *host_source, da_t device_destination, int64_t size) {
     cl_mem_ext_ptr_t ext;
     ext.param = alveo_state.kernel;
     ext.obj = nullptr;
 
+
     ext.flags = 0; // Create write stream for argument 0 of kernel. MAY NEED FIXING!
-    alveo_state.h2k_stream = clCreateStream(alveo_state.device_id, XCL_STREAM_READ_ONLY, CL_STREAM, &ext, &alveo_state.stream_ret);
+    alveo_state.h2k_stream = clCreateStream(alveo_state.device_id, XCL_STREAM_READ_ONLY, CL_STREAM, &ext, &alveo_state.ret);
 
     // Initiate the READ transfer
     cl_stream_xfer_req rd_req {0};
     rd_req.flags = CL_STREAM_EOT | CL_STREAM_NONBLOCKING;
     rd_req.priv_data = (void*)"read";
-    clReadStream(alveo_state.k2h_stream, host_read_ptr, max_read_size, &rd_req, &ret);
+    clReadStream(alveo_state.k2h_stream, host_read_ptr, max_read_size, &rd_req, &alveo_state.ret);
 
     // Checking the request completion
     cl_streams_poll_req_completions poll_req[2] {0}; // 1 Requests
@@ -344,13 +350,13 @@ fstatus_t platformCopyDeviceToHost(da_t device_source, uint8_t *host_destination
     ext.obj = nullptr;
 
     ext.flags = 0; // Create write stream for argument 0 of kernel. MAY NEED FIXING!
-    alveo_state.k2h_stream = clCreateStream(alveo_state.device_id, XCL_STREAM_WRITE_ONLY, CL_STREAM, &ext, &alveo_state.stream_ret);
+    alveo_state.k2h_stream = clCreateStream(alveo_state.device_id, XCL_STREAM_WRITE_ONLY, CL_STREAM, &ext, &alveo_state.ret);
 
     // Initiating the WRITE transfer
     cl_stream_xfer_req wr_req {0};
     wr_req.flags = CL_STREAM_EOT | CL_STREAM_NONBLOCKING;
     wr_req.priv_data = (void*)"write";
-    clWriteStream(h2k_stream, host_write_ptr, write_size, &wr_req , &ret);
+    clWriteStream(h2k_stream, host_write_ptr, write_size, &wr_req , &alveo_state.ret);
 
     cl_streams_poll_req_completions poll_req[2] {0}; // 1 Requests
     debug_print(

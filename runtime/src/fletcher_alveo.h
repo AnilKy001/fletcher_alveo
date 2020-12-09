@@ -29,6 +29,9 @@ typedef struct {
     cl_command_queue commands;
     cl_program program;
     cl_kernel kernel;
+    cl_stream h2k_stream;
+    cl_stream k2h_stream;
+    cl_int *stream_ret;
 } PlatformState;
 
 PlatformState alveo_state ={NULL, ALVEO_DEVICE_NAME, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
