@@ -45,7 +45,7 @@ fstatus_t platformInit(int argc, char **argv){
 	//Read settings:
 	std::string binaryFile = parser.value("xclbin_file");
 	unsigned int num_Blocks = stoi(parser.value("block_count"));
-	unsigned int BLock_Size = stoi(parser.value("block_size"));
+	unsigned int Block_Size = stoi(parser.value("block_size"));
 
 	//If no xclbin file is provided, exit.
 	if(binaryFile.empty()){
@@ -58,8 +58,8 @@ fstatus_t platformInit(int argc, char **argv){
 	
 	//Load the binary file and return the pointer 
 	//to file buffer.
-	auto fileBuf = xcl::read_binary_file(binaryFile);
-	alveo_state.bins{{fileBuf.data(), fleBuf.size()}};
+	fileBuf = xcl::read_binary_file(binaryFile);
+	alveo_state.bins{{(alveo_state.fileBuf).data(), fleBuf.size()}};
 	bool valid_device = false;
 	for(unsigned int = 0; i < devices.size(); i++){
 		alveo_state.device = devices[i];
@@ -98,7 +98,7 @@ fstatus_t platformInit(int argc, char **argv){
 		exit(EXIT_FAILURE);
 	}
 
-	auto platform_id = (alveo_state.device).getInfo<CL_DEVICE_PLATFORM>(&(alveo_state.err));
+	platform_id = (alveo_state.device).getInfo<CL_DEVICE_PLATFORM>(&(alveo_state.err));
 }
 
 
@@ -139,3 +139,46 @@ fstatus_t platformCopyHostToDevice(const uint8_t *host_source, da_t device_desti
 	poll_req = (cl_streams_poll_req_completions *)malloc(sizeof(
 				cl_streams_poll_req_completion)*num_compl);
 
+
+
+fstatus_t platformWriteMMIO(uint64_t offset, uint32_t value){
+	xcl::Stream::init(alveo_state.platform_id);
+	xcl::Ext::init(alveo_state.platform_id);
+	
+	uuid_t xclbinId;
+	xclbin_uuid((alveo_state.fileBuf).data(), xclbinId);
+	
+	//Getting the device handle:
+	clGetDeviceInfo((alveo_state.device).get(), CL_DEVICE_HANDLE, 
+		sizeof(alveo_state.handle), &(alveo_state.handle), nullptr);
+	
+	cl_uint cuidx;
+	xcl::Ext::getComputeUnitInfo((alveo_state.kernel).get(), 0, 
+		XCL_COMPUTE_UNIT_INDEX, sizeof(cuidx), &cuidx, nullptr);
+
+	//Write the register value:
+	xclOpenContext(alveo_state.handle, xclbinId, cuidx, false);
+	
+	//Write "value" to "offset":
+	xclRegWrite(alveo_state.handle, cuidx, offset, value);
+	std::cout << "\nThe register value that is written: " << std::endl;
+	
+	uint32_t drive_valid = 1;
+	xclRegWrite(alveo_state.handle, cuidx, offset + sizeof(int), drive_valid);
+	
+	//Closing the context:
+	xclCloseContext(alveo_state.handle, xclbinId, cuidx);
+	
+	
+	//Streaming:
+	cl_int ret;
+	cl_mem_ext_ptr_t ext_stream;
+	ext_stream.param = krnl_incr.get();
+	ext_stream.obj = NULL;
+	ext_stream.flags = 1;
+	
+	
+
+	  
+	
+}

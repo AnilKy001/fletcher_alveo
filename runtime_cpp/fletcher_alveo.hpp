@@ -24,6 +24,9 @@ typedef struct {
 	cl::CommandQueue q;	
 	cl::Program program;
 	cl::Program::Binaries bins;
+	auto fileBuf;
+	auto platform_id;
+	xclDeviceHandle handle;
 } PlatformState;
 
 PlatformState alveo_state ={NULL, ALVEO_DEVICE_NAME, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
