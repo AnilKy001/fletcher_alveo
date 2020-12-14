@@ -53,9 +53,7 @@ void performStream(){
 
   // Initiating the WRITE transfer
   cl_stream_xfer_req wr_req{0};
-
   wr_req.flags = CL_STREAM_EOT;
-
   OCL_CHECK(ret, xcl::Stream::writeStream(axis01_stream, h_data.data(),
                                           vector_size_bytes, &wr_req, &ret));
 
