@@ -23,29 +23,60 @@ decltype(&clPollStreams) xcl::stream::pollStreams = nullptr;
 //decltype(&xclGetComputeUnitInfo) xcl::Ext::getComputeUnitInfo = nullptr;
 
 
+void performStream(){
 
+	//Initialization of the streaming class before usage is needed before usage.
+	xcl::Stream::init(alveo_state.platform_id);
+	xcl::Ext::init(alveo_state.platform_id);
+
+	cl_int ret;
+
+	// Device Connection specification of the stream through extension pointer:
+  cl_mem_ext_ptr_t ext_stream;
+  ext_stream.param = (alveo_state.kernel).get();
+  ext_stream.obj = NULL;
+
+	// The .flag should be used to denote the kernel argument
+	// Create write stream for argument 1 of kernel:
+  ext_stream.flags = 1;
+
+  // Create streams:
+  cl_stream axis00_stream, axis01_stream;
+  OCL_CHECK(ret, axis00_stream = xcl::Stream::createStream(
+                     (alveo_state.device).get(), XCL_STREAM_WRITE_ONLY, CL_STREAM,
+                     &ext_stream, &ret));
+
+  ext_stream.flags = 0;
+  OCL_CHECK(ret, axis01_stream = xcl::Stream::createStream(
+                     (alveo_state.device).get(), XCL_STREAM_READ_ONLY, CL_STREAM,
+										 &ext_stream, &ret));
+
+  // Initiating the WRITE transfer
+  cl_stream_xfer_req wr_req{0};
+
+  wr_req.flags = CL_STREAM_EOT;
+
+  OCL_CHECK(ret, xcl::Stream::writeStream(axis01_stream, h_data.data(),
+                                          vector_size_bytes, &wr_req, &ret));
+
+  // Initiating the READ transfer
+  cl_stream_xfer_req rd_req{0};
+  rd_req.flags = CL_STREAM_EOT;
+  OCL_CHECK(ret, xcl::Stream::readStream(axis00_stream, read_data.data(),
+                                         vector_size_bytes, &rd_req, &ret));
+}
 
 fstatus_t platformInit(int argc, char **argv){
-
-
-	std::string Block_Count = "1024";
-	if(xcl::is_emulation()){
-		Block_Count = "2";
-	}
 
 	//command line parser:
 	sda::utils::CmdLineParser parser;
 
-	//Switches:
+	//Get the .xclbin file from the terminal command:
 	parser.addSwitch("--xclbin_file", "-x", "input binary file string: ", "");
-	parser.addSwitch("--block_count", "-nb", "number of blocks", Block_Count);
-	parser.addSwitch("--block_size", "-bs", "Size of Each Block in KB", "256");
 	parser.parse(argc, argv);
 
 	//Read settings:
 	std::string binaryFile = parser.value("xclbin_file");
-	unsigned int num_Blocks = stoi(parser.value("block_count"));
-	unsigned int Block_Size = stoi(parser.value("block_size"));
 
 	//If no xclbin file is provided, exit.
 	if(binaryFile.empty()){
@@ -53,29 +84,30 @@ fstatus_t platformInit(int argc, char **argv){
 		exit();
 	}
 
+
 	//A vector of available devices:
 	auto devices = xcl::get_xil_devices();
-	
-	//Load the binary file and return the pointer 
+
+	//Load the binary file and return the pointer
 	//to file buffer.
-	fileBuf = xcl::read_binary_file(binaryFile);
+	alveo_state.fileBuf = xcl::read_binary_file(binaryFile);
 	alveo_state.bins{{(alveo_state.fileBuf).data(), fleBuf.size()}};
 	bool valid_device = false;
 	for(unsigned int = 0; i < devices.size(); i++){
 		alveo_state.device = devices[i];
 		//Create a Context and a Command Queue for the selected device.
 		OCL_CHECK(alveo_state.err, alveo_state.context = cl::Context(
-					device, NULL, NULL, NULL, &alveo_state.err));
+					alveo_state.device, NULL, NULL, NULL, &alveo_state.err));
 		OCL_CHECK(alveo_state.err, alveo_state.q = cl::CommandQueue(
-					alveo_state.context, alveo_state.device, 
-					CL_QUEUE_PROFILING_ENABLE | 
-					CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &alveo_state.err));
+					alveo_state.context, alveo_state.device,
+					CL_QUEUE_PROFILING_ENABLE |
+					CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &(alveo_state.err)));
 
 		//Now, program the device.
 		std::cout << "Trying to program device[" << i << "]: " << (alveo_state).device.getInfo<
 			CL_DEVICE_NAME>() << std::endl;
 
-		alveo_state.program(alveo_state.context, {alveo_state.device}, alveo_state.bins, 
+		alveo_state.program(alveo_state.context, {alveo_state.device}, alveo_state.bins,
 				NULL, &alveo_state.err);
 
 		if(alveo_state.err != CL_SUCCESS){
@@ -86,7 +118,7 @@ fstatus_t platformInit(int argc, char **argv){
 
 
 		//Creating Kernel (contained within .xlcbin file/Program):
-		OCL_CHECK(alveo_state.err, alveo_state.kernel = cl::Kernel(alveo_state.program, 
+		OCL_CHECK(alveo_state.err, alveo_state.kernel = cl::Kernel(alveo_state.program,
 					"kernel", &alveo_state.err));
 		valid_device = true;
 		break; //we break because we found a valid device.
@@ -105,9 +137,8 @@ fstatus_t platformInit(int argc, char **argv){
 
 fstatus_t platformCopyHostToDevice(const uint8_t *host_source, da_t device_destination, int64_t size){
 
-	//Initialization of the streaming class before usage is needed before usage.
-	xcl::Stream::init(alveo_state.platform_id);
-	
+
+
 	//Streams are:
 	cl_stream h2c_stream_a;
 	cl_stream c2h_stream;
@@ -123,7 +154,7 @@ fstatus_t platformCopyHostToDevice(const uint8_t *host_source, da_t device_desti
 	// Create write stream for argument 0 of kernel:
 	ext.flags = 0;
 
-	OCL_CHECK(ret, h2c_stream_a = xcl::Stream::createStream((alveo_state.device).get(), 
+	OCL_CHECK(ret, h2c_stream_a = xcl::Stream::createStream((alveo_state.device).get(),
 			XCL_STREAM_READ_ONLY, CL_STREAM, &(alveo_state.ext), &(alveo_state.ret)));
 
 	// Create read stream for argument 1 of kernel:
@@ -133,7 +164,7 @@ fstatus_t platformCopyHostToDevice(const uint8_t *host_source, da_t device_desti
 
 	//Sync for the async streaming.
 	int num_compl = 2 * num_Blocks;
-	
+
 	//Checking the request completion:
 	cl_streams_poll_req_completions *poll_req;
 	poll_req = (cl_streams_poll_req_completions *)malloc(sizeof(
@@ -144,41 +175,41 @@ fstatus_t platformCopyHostToDevice(const uint8_t *host_source, da_t device_desti
 fstatus_t platformWriteMMIO(uint64_t offset, uint32_t value){
 	xcl::Stream::init(alveo_state.platform_id);
 	xcl::Ext::init(alveo_state.platform_id);
-	
+
 	uuid_t xclbinId;
 	xclbin_uuid((alveo_state.fileBuf).data(), xclbinId);
-	
+
 	//Getting the device handle:
-	clGetDeviceInfo((alveo_state.device).get(), CL_DEVICE_HANDLE, 
+	clGetDeviceInfo((alveo_state.device).get(), CL_DEVICE_HANDLE,
 		sizeof(alveo_state.handle), &(alveo_state.handle), nullptr);
-	
+
 	cl_uint cuidx;
-	xcl::Ext::getComputeUnitInfo((alveo_state.kernel).get(), 0, 
+	xcl::Ext::getComputeUnitInfo((alveo_state.kernel).get(), 0,
 		XCL_COMPUTE_UNIT_INDEX, sizeof(cuidx), &cuidx, nullptr);
 
 	//Write the register value:
 	xclOpenContext(alveo_state.handle, xclbinId, cuidx, false);
-	
+
 	//Write "value" to "offset":
 	xclRegWrite(alveo_state.handle, cuidx, offset, value);
 	std::cout << "\nThe register value that is written: " << std::endl;
-	
+
 	uint32_t drive_valid = 1;
 	xclRegWrite(alveo_state.handle, cuidx, offset + sizeof(int), drive_valid);
-	
+
 	//Closing the context:
 	xclCloseContext(alveo_state.handle, xclbinId, cuidx);
-	
-	
+
+
 	//Streaming:
 	cl_int ret;
 	cl_mem_ext_ptr_t ext_stream;
 	ext_stream.param = krnl_incr.get();
 	ext_stream.obj = NULL;
 	ext_stream.flags = 1;
-	
-	
 
-	  
-	
+
+
+
+
 }
