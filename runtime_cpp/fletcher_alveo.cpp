@@ -64,6 +64,24 @@ void performStream(){
                                          vector_size_bytes, &rd_req, &ret));
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 fstatus_t platformInit(int argc, char **argv){
 
 	//command line parser:
@@ -128,8 +146,23 @@ fstatus_t platformInit(int argc, char **argv){
 		exit(EXIT_FAILURE);
 	}
 
-	platform_id = (alveo_state.device).getInfo<CL_DEVICE_PLATFORM>(&(alveo_state.err));
+	alveo_state.platform_id = (alveo_state.device).getInfo<CL_DEVICE_PLATFORM>(&(alveo_state.err));
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
